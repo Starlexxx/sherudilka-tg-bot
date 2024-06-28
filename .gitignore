@@ -1,0 +1,8 @@
+# ignore IDE
+.idea
+
+# ignore system files
+.DS_Store
+
+# ignore data files
+*.dat
