@@ -1,21 +1,39 @@
 # frozen_string_literal: true
 
 require 'telegram/bot'
+require 'redis'
 
 class Bot
-  attr_reader :client, :users
+  attr_reader :db, :client, :commands
 
   TOKEN = ENV['TELEGRAM_BOT_TOKEN']
-  USERS_FILE = 'users.dat'
+  REDIS_CONFIG = { host: 'redis', port: 6379, db: 15 }.freeze
 
   def initialize
+    @db = Redis.new(REDIS_CONFIG)
+    db.persist('users')
     @client = Telegram::Bot::Client.new(TOKEN)
-    @users = load_users
+    @commands = {
+      '/start' => method(:handle_start),
+      '/add_me' => method(:handle_add_me),
+      '/remove_me' => method(:handle_remove_me),
+      '/go' => method(:handle_go)
+    }
 
     run
   end
 
   private
+
+  def handle_start(message)
+    kb = [
+      [Telegram::Bot::Types::KeyboardButton.new(text: '/add_me')],
+      [Telegram::Bot::Types::KeyboardButton.new(text: '/remove_me')],
+      [Telegram::Bot::Types::KeyboardButton.new(text: '/go')]
+    ]
+    markup = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard: kb)
+    client.api.send_message(chat_id: message.chat.id, text: 'Choose a command:', reply_markup: markup)
+  end
 
   def run
     client.listen do |message|
@@ -26,56 +44,63 @@ class Bot
   def handle_message(message)
     return unless message.is_a?(Telegram::Bot::Types::Message)
 
-    case message.text
-    when '/add_me'
-      handle_add_me(message)
-    when '/remove_me'
-      handle_remove_me(message)
-    when '/go'
-      handle_go(message)
-    end
+    command = commands[message.text]
+    command.call(message) if command
   end
 
   def handle_add_me(message)
-    users[message.chat.id] = message.from.username
-    save_users
+    username = message.from.username
+    chat_id = message.chat.id.to_s
 
-    client.api.send_message(chat_id: message.chat.id, text: "Теперь @#{message.from.username} готов шерудить очком!")
+    if user_in_chat?(username, chat_id)
+      send_message(chat_id, "@#{username}, ты уже глиномесишься!")
+    else
+      add_user_to_chat(username, chat_id)
+      send_message(chat_id, "Теперь @#{username} готов шерудить очком!")
+    end
   end
 
   def handle_remove_me(message)
-    users.delete(message.chat.id)
-    save_users
+    username = message.from.username
+    chat_id = message.chat.id.to_s
 
-    client.api.send_message(chat_id: message.chat.id, text: "Записал @#{message.from.username} в натуралы!")
+    if user_in_chat?(username, chat_id)
+      remove_user_from_chat(username, chat_id)
+      send_message(chat_id, "Записал @#{username} в натуралы!")
+    else
+      send_message(chat_id, "@#{username}, ты грязный и скучный натурал!")
+    end
   end
 
   def handle_go(message)
-    current_chat_users = users.select { |chat_id, username| chat_id == message.chat.id }
+    chat_id = message.chat.id.to_s
+    current_chat_users = users_in_chat(chat_id)
+
     if current_chat_users.empty?
-      client.api.send_message(chat_id: message.chat.id, text: 'Никто не готов шерудить очком((((')
+      send_message(chat_id, 'Никто не готов шерудить очком((((')
     else
-      users_list = current_chat_users.values.map { |username| "@#{username}" }.join(', ')
-      client.api.send_message(chat_id: message.chat.id, text: "Погнали шерудить очком #{users_list}!")
+      users_list = current_chat_users.map { |username| "@#{username}" }.join(', ')
+      send_message(chat_id, "Погнали шерудить очком #{users_list}!")
     end
   end
 
-  def save_users
-    File.open(USERS_FILE, 'wb') do |f|
-      f.write(Marshal.dump(users))
-    rescue StandardError => e
-      puts "Failed to save users: #{e.message}"
-    end
+  def user_in_chat?(username, chat_id)
+    db.lrange(username, 0, -1).include?(chat_id)
   end
 
-  def load_users
-    return {} unless File.exist?(USERS_FILE)
+  def add_user_to_chat(username, chat_id)
+    db.rpush(username, chat_id)
+  end
 
-    File.open(USERS_FILE, 'rb') do |f|
-      Marshal.load(f)
-    rescue StandardError => e
-      puts "Failed to load users: #{e.message}"
-      {}
-    end
+  def remove_user_from_chat(username, chat_id)
+    db.lrem(username, 0, chat_id)
+  end
+
+  def users_in_chat(chat_id)
+    db.keys.select { |username| user_in_chat?(username, chat_id) }
+  end
+
+  def send_message(chat_id, text)
+    client.api.send_message(chat_id: chat_id, text: text)
   end
 end
