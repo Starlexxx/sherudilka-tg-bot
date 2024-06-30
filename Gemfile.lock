@@ -33,6 +33,7 @@ GEM
     multipart-post (2.4.1)
     net-http (0.4.1)
       uri
+    redis (4.6.0)
     telegram-bot-ruby (2.0.0)
       dry-struct (~> 1.6)
       faraday (~> 2.0)
@@ -45,6 +46,7 @@ PLATFORMS
   arm64-darwin-23
 
 DEPENDENCIES
+  redis
   telegram-bot-ruby
 
 BUNDLED WITH
