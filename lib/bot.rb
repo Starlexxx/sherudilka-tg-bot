@@ -11,7 +11,6 @@ class Bot
 
   def initialize
     @db = Redis.new(REDIS_CONFIG)
-    db.persist('users')
     @client = Telegram::Bot::Client.new(TOKEN)
     @commands = {
       '/start' => method(:handle_start),
@@ -90,6 +89,7 @@ class Bot
 
   def add_user_to_chat(username, chat_id)
     db.rpush(username, chat_id)
+    db.persist(username)
   end
 
   def remove_user_from_chat(username, chat_id)
