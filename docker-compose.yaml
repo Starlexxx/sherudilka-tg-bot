@@ -6,7 +6,12 @@ services:
       dockerfile: Dockerfile
     command: ["ruby", "bin/main.rb"]
     environment:
+      - LOG_FILE=${LOG_FILE}
+      - LOG_LEVEL=${LOG_LEVEL}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_DB=${REDIS_DB}
     depends_on:
       - redis
     networks:
