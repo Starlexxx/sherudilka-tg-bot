@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["ruby", "bin/main.rb"]
+    command: [ "ruby", "bin/main.rb" ]
     environment:
       - LOG_FILE=${LOG_FILE}
       - LOG_LEVEL=${LOG_LEVEL}
@@ -18,14 +18,21 @@ services:
       - app_net
   redis:
     image: redis:latest
+    command: redis-server /usr/local/etc/redis/redis.conf
     ports:
       - "6379:6379"
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - DISABLE_COMMANDS=FLUSHDB,FLUSHALL,CONFIG
+      - REDIS_APPENDFSYNC=always
     volumes:
+      - redis_data:/data
       - ./config/redis.conf:/usr/local/etc/redis/redis.conf
     networks:
-        - app_net
+      - app_net
 volumes:
-    redis_data:
+  redis_data:
+    driver: local
 networks:
-    app_net:
-      driver: bridge
+  app_net:
+    driver: bridge
