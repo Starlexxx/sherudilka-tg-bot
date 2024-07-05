@@ -10,6 +10,14 @@ class CommandHandler
 
   COMMANDS = %w[start add_me remove_me go].freeze
 
+  KEYBOARD = [
+    [
+      Telegram::Bot::Types::KeyboardButton.new(text: '/add_me'),
+      Telegram::Bot::Types::KeyboardButton.new(text: '/remove_me'),
+      Telegram::Bot::Types::KeyboardButton.new(text: '/go')
+    ]
+  ]
+
   # Initializes the CommandHandler.
   #
   # @param client [Telegram::Bot::Client] the Telegram bot client
@@ -24,17 +32,10 @@ class CommandHandler
   #
   # @param message [Telegram::Bot::Types::Message] the incoming message
   # @return [void]
-  KEYBOARD = [
-    [
-      Telegram::Bot::Types::KeyboardButton.new(text: '/add_me'),
-      Telegram::Bot::Types::KeyboardButton.new(text: '/remove_me'),
-      Telegram::Bot::Types::KeyboardButton.new(text: '/go')
-    ]
-  ]
-
   def handle_start(message)
-    markup = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard: KEYBOARD)
-    client.api.send_message(chat_id: message.chat.id, text: 'Choose a command:', reply_markup: markup)
+    markup = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard: KEYBOARD, resize_keyboard: true)
+
+    client.api.send_message(chat_id: message.chat.id, text: 'Пошерудим очком, шалунишка?)', reply_markup: markup)
   end
 
   # Handles the /add_me command. Adds the user to the chat in the database and sends a confirmation message.
@@ -49,6 +50,7 @@ class CommandHandler
       send_message(chat_id, "@#{username}, ты уже глиномесишься!")
     else
       db_processor.add_user_to_chat(username, chat_id)
+
       send_message(chat_id, "Теперь @#{username} готов шерудить очком!")
     end
   end
@@ -78,10 +80,16 @@ class CommandHandler
     current_chat_users = db_processor.users_in_chat(chat_id)
 
     if current_chat_users.empty?
-      send_message(chat_id, 'Никто не готов шерудить очком((((')
-    else
+      send_message(chat_id, 'Никто не готов шерудить очком(((')
+
+      return
+    end
+
+    if current_chat_users.include?(message.from.username)
       users_list = current_chat_users.map { |username| "@#{username}" }.join(', ')
       send_message(chat_id, "Погнали шерудить очком #{users_list}!")
+    else
+      send_message(chat_id, "Ты не готов шерудить очком, грязный натурал!")
     end
   end
 
