@@ -20,13 +20,13 @@ module Database
 
       logger.info(
         "Initializing the database processor with the configuration: " \
-          "#{ENV['REDIS_HOST']}:#{ENV['REDIS_PORT']}/#{ENV['REDIS_DB']}"
+          "#{ENV['REDIS_HOST']}:#{ENV['REDIS_PORT']}"
       )
 
-      @db = Redis.new(host: ENV['REDIS_HOST'], port: ENV['REDIS_PORT'], db: ENV['REDIS_DB'])
+      @db = Redis.new(host: ENV['REDIS_HOST'], port: ENV['REDIS_PORT'])
       if @db.ping != 'PONG'
         message = 'Could not connect to the database with the provided configuration: ' \
-          "#{ENV['REDIS_HOST']}:#{ENV['REDIS_PORT']}/#{ENV['REDIS_DB']}"
+          "#{ENV['REDIS_HOST']}:#{ENV['REDIS_PORT']}}"
 
         logger.error(message)
 
