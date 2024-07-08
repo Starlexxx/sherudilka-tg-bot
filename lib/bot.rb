@@ -16,6 +16,8 @@ class Bot
   attr_reader :logger, :db_processor, :command_handler, :client
 
   TOKEN = ENV['TELEGRAM_BOT_TOKEN']
+  MAX_RETRIES = 5
+  RETRY_DELAY = 5
 
   # Initializes the bot.
   def initialize
@@ -52,10 +54,34 @@ class Bot
   # @return [void]
   def run
     logger.info('Starting listening for messages...')
+    retries = 0
 
-    client.listen do |message|
-      handle_message(message)
+    begin
+      client.listen do |message|
+        handle_message(message)
+      end
+    rescue Telegram::Bot::Exceptions::ResponseError => e
+      logger.error("#{Time.now} - Telegram API Error: #{e.message}")
+      retry_connection(retries += 1)
+    rescue StandardError => e
+      logger.error("#{Time.now} - Unexpected Error: #{e.message}")
+      exit(1)
     end
+  end
+
+  # Retries the connection if an error occurs.
+  # The bot will wait for 5 seconds before retrying.
+  # The maximum number of retries is 5.
+  #
+  # @param retries [Integer] the number of retries
+  # @return [void]
+  def retry_connection(retries)
+    return if retries > MAX_RETRIES
+
+    logger.info("#{Time.now} - Retrying connection in #{RETRY_DELAY} seconds... (attempt #{retries})")
+    sleep(RETRY_DELAY)
+
+    run
   end
 
   # Handles an incoming message.
