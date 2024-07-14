@@ -62,10 +62,12 @@ class Bot
       end
     rescue Telegram::Bot::Exceptions::ResponseError => e
       logger.error("#{Time.now} - Telegram API Error: #{e.message}")
+
       retry_connection(retries += 1)
     rescue StandardError => e
       logger.error("#{Time.now} - Unexpected Error: #{e.message}")
-      exit(1)
+
+      raise e
     end
   end
 

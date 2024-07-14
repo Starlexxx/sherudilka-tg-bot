@@ -40,6 +40,7 @@ module Database
     # @param chat_id [String] the ID of the chat
     # @return [Boolean] true if the user is in the chat, false otherwise
     def user_in_chat?(username, chat_id)
+      logger.info("DatabaseProcessor: #{Time.now} - Checking if user #{username} is in chat #{chat_id}")
       db.lrange(username, 0, -1).include?(chat_id)
     end
 
@@ -51,7 +52,7 @@ module Database
     def add_user_to_chat(username, chat_id)
       logger.info("DatabaseProcessor: #{Time.now} - Adding user #{username} to chat #{chat_id}")
       db.rpush(username, chat_id)
-      db.persist(username)
+      logger.info("DatabaseProcessor: #{Time.now} - User #{username} added to chat #{chat_id}")
     end
 
     # Removes a user from a chat.
@@ -62,6 +63,7 @@ module Database
     def remove_user_from_chat(username, chat_id)
       logger.info("DatabaseProcessor: #{Time.now} - Removing user #{username} from chat #{chat_id}")
       db.lrem(username, 0, chat_id)
+      logger.info("DatabaseProcessor: #{Time.now} - User #{username} removed from chat #{chat_id}")
     end
 
     # Gets the users in a chat.
