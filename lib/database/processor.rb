@@ -71,7 +71,25 @@ module Database
     # @param chat_id [String] the ID of the chat
     # @return [Array<String>] the usernames of the users in the chat
     def users_in_chat(chat_id)
-      db.keys.select { |username| user_in_chat?(username, chat_id) }
+      pattern = "chat:#{chat_id}:*"
+      users_in_chat = []
+
+      # Iterate over keys that directly relate to the chat_id
+      cursor = "0"
+      loop do
+        cursor, keys = db.scan(cursor, match: pattern)
+        users_in_chat.concat(keys.map { |key| extract_username_from_key(key) })
+        break if cursor == "0"
+      end
+
+      users_in_chat
+    end
+
+    private
+
+    # Extracts the username from the Redis key assuming the key format is "chat:chat_id:username"
+    def extract_username_from_key(key)
+      key.split(':').last
     end
   end
 end
