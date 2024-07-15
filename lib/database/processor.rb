@@ -41,33 +41,33 @@ module Database
 
     # Checks if a user is in a chat.
     #
-    # @param username [String] the username of the user
     # @param chat_id [String] the ID of the chat
+    # @param username [String] the username of the user
     # @return [Boolean] true if the user is in the chat, false otherwise
-    def user_in_chat?(username, chat_id)
+    def user_in_chat?(chat_id, username)
       logger.info("DatabaseProcessor: #{Time.now} - Checking if user #{username} is in chat #{chat_id}")
-      db.lrange(username, 0, -1).include?(chat_id)
+      db.lrange(chat_id, 0, -1).include?(username)
     end
 
     # Adds a user to a chat.
     #
-    # @param username [String] the username of the user
     # @param chat_id [String] the ID of the chat
+    # @param username [String] the username of the user
     # @return [void]
-    def add_user_to_chat(username, chat_id)
+    def add_user_to_chat(chat_id, username)
       logger.info("DatabaseProcessor: #{Time.now} - Adding user #{username} to chat #{chat_id}")
-      db.rpush(username, chat_id)
+      db.rpush(chat_id, username)
       logger.info("DatabaseProcessor: #{Time.now} - User #{username} added to chat #{chat_id}")
     end
 
     # Removes a user from a chat.
     #
-    # @param username [String] the username of the user
     # @param chat_id [String] the ID of the chat
+    # @param username [String] the username of the user
     # @return [void]
-    def remove_user_from_chat(username, chat_id)
+    def remove_user_from_chat(chat_id, username)
       logger.info("DatabaseProcessor: #{Time.now} - Removing user #{username} from chat #{chat_id}")
-      db.lrem(username, 0, chat_id)
+      db.lrem(chat_id, 0, username)
       logger.info("DatabaseProcessor: #{Time.now} - User #{username} removed from chat #{chat_id}")
     end
 
@@ -76,25 +76,8 @@ module Database
     # @param chat_id [String] the ID of the chat
     # @return [Array<String>] the usernames of the users in the chat
     def users_in_chat(chat_id)
-      pattern = "chat:#{chat_id}:*"
-      users_in_chat = []
-
-      # Iterate over keys that directly relate to the chat_id
-      cursor = "0"
-      loop do
-        cursor, keys = db.scan(cursor, match: pattern)
-        users_in_chat.concat(keys.map { |key| extract_username_from_key(key) })
-        break if cursor == "0"
-      end
-
-      users_in_chat
-    end
-
-    private
-
-    # Extracts the username from the Redis key assuming the key format is "chat:chat_id:username"
-    def extract_username_from_key(key)
-      key.split(':').last
+      logger.info("DatabaseProcessor: #{Time.now} - Getting users in chat #{chat_id}")
+      db.lrange(chat_id, 0, -1)
     end
   end
 end

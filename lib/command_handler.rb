@@ -46,10 +46,10 @@ class CommandHandler
     username = message.from.username
     chat_id = message.chat.id.to_s
 
-    if db_processor.user_in_chat?(username, chat_id)
+    if db_processor.user_in_chat?(chat_id, username)
       send_message(chat_id, "@#{username}, ты уже глиномесишься!")
     else
-      db_processor.add_user_to_chat(username, chat_id)
+      db_processor.add_user_to_chat(chat_id, username)
 
       send_message(chat_id, "Теперь @#{username} готов шерудить очком!")
     end
@@ -63,8 +63,8 @@ class CommandHandler
     username = message.from.username
     chat_id = message.chat.id.to_s
 
-    if db_processor.user_in_chat?(username, chat_id)
-      db_processor.remove_user_from_chat(username, chat_id)
+    if db_processor.user_in_chat?(chat_id, username)
+      db_processor.remove_user_from_chat(chat_id, username)
       send_message(chat_id, "Записал @#{username} в натуралы!")
     else
       send_message(chat_id, "@#{username}, ты грязный и скучный натурал!")
