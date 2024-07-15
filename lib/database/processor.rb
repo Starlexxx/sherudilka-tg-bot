@@ -23,7 +23,12 @@ module Database
           "#{ENV['REDIS_HOST']}:#{ENV['REDIS_PORT']}"
       )
 
-      @db = Redis.new(host: ENV['REDIS_HOST'], port: ENV['REDIS_PORT'])
+      @db = Redis.new(
+        host: ENV['REDIS_HOST'],
+        port: ENV['REDIS_PORT'],
+        username: ENV['REDIS_USERNAME'],
+        password: ENV['REDIS_PASSWORD']
+      )
       if @db.ping != 'PONG'
         message = 'Could not connect to the database with the provided configuration: ' \
           "#{ENV['REDIS_HOST']}:#{ENV['REDIS_PORT']}}"
