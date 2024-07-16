@@ -1,106 +1,123 @@
 # frozen_string_literal: true
 
 require 'telegram/bot'
-require 'redis'
+require_relative 'database/processor'
+require_relative 'command_handler'
 
+# Bot class is the main entrypoint for the bot.
+# It initializes the client, database processor, and command handler, and listens for incoming messages.
+# When a message is received, it checks if the message is a command and calls the corresponding method
+# in the command handler. Don't forget to initialize the environment variable TELEGRAM_BOT_TOKEN with your bot token.
+#
+# @attr_reader [Database::Processor] db_processor the database processor
+# @attr_reader [CommandHandler] command_handler the command handler
+# @attr_reader [Telegram::Bot::Client] client the Telegram bot client
 class Bot
-  attr_reader :db, :client, :commands
+  attr_reader :logger, :db_processor, :command_handler, :client
 
   TOKEN = ENV['TELEGRAM_BOT_TOKEN']
-  REDIS_CONFIG = { host: 'redis', port: 6379, db: 15 }.freeze
+  MAX_RETRIES = 5
+  RETRY_DELAY = 5
 
+  # Initializes the bot.
   def initialize
-    @db = Redis.new(REDIS_CONFIG)
+    @logger = init_logger
+
+    @logger.info('Initializing the bot...')
+
+    @db_processor = Database::Processor.new(@logger)
     @client = Telegram::Bot::Client.new(TOKEN)
-    @commands = {
-      '/start' => method(:handle_start),
-      '/add_me' => method(:handle_add_me),
-      '/remove_me' => method(:handle_remove_me),
-      '/go' => method(:handle_go)
-    }
+    @command_handler = CommandHandler.new(client, db_processor)
+
+    @logger.info('Bot initialized.')
 
     run
   end
 
   private
 
-  def handle_start(message)
-    kb = [
-      [Telegram::Bot::Types::KeyboardButton.new(text: '/add_me')],
-      [Telegram::Bot::Types::KeyboardButton.new(text: '/remove_me')],
-      [Telegram::Bot::Types::KeyboardButton.new(text: '/go')]
-    ]
-    markup = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard: kb)
-    client.api.send_message(chat_id: message.chat.id, text: 'Choose a command:', reply_markup: markup)
+  # Initializes the logger.
+  #
+  # @return [Logger] the logger instance
+  def init_logger
+    log_file = ENV['LOG_FILE']
+    File.new(log_file, 'w') unless File.exist?(log_file)
+
+    logger = Logger.new(log_file || STDOUT)
+    logger.level = ENV['LOG_LEVEL'] || Logger::INFO
+
+    logger
   end
 
+  # Starts the bot and listens for incoming messages.
+  #
+  # @return [void]
   def run
-    client.listen do |message|
-      handle_message(message)
+    logger.info('Starting listening for messages...')
+    retries = 0
+
+    begin
+      client.listen do |message|
+        handle_message(message)
+      end
+    rescue Telegram::Bot::Exceptions::ResponseError => e
+      logger.error("#{Time.now} - Telegram API Error: #{e.message}")
+
+      retry_connection(retries += 1)
+    rescue StandardError => e
+      logger.error("#{Time.now} - Unexpected Error: #{e.message}")
+
+      raise e
     end
   end
 
+  # Retries the connection if an error occurs.
+  # The bot will wait for 5 seconds before retrying.
+  # The maximum number of retries is 5.
+  #
+  # @param retries [Integer] the number of retries
+  # @return [void]
+  def retry_connection(retries)
+    return if retries > MAX_RETRIES
+
+    logger.info("#{Time.now} - Retrying connection in #{RETRY_DELAY} seconds... (attempt #{retries})")
+    sleep(RETRY_DELAY)
+
+    run
+  end
+
+  # Handles an incoming message.
+  #
+  # @param message [Telegram::Bot::Types::Message] the incoming message
+  # @return [void]
   def handle_message(message)
-    return unless message.is_a?(Telegram::Bot::Types::Message)
+    command = parse_command(message)
 
-    command = commands[message.text]
-    command.call(message) if command
-  end
-
-  def handle_add_me(message)
-    username = message.from.username
-    chat_id = message.chat.id.to_s
-
-    if user_in_chat?(username, chat_id)
-      send_message(chat_id, "@#{username}, ты уже глиномесишься!")
+    if command && command_handler.respond_to?(command)
+      command_handler.public_send(command, message)
     else
-      add_user_to_chat(username, chat_id)
-      send_message(chat_id, "Теперь @#{username} готов шерудить очком!")
+      logger.error("Unknown command: #{message.text}") if command
     end
   end
 
-  def handle_remove_me(message)
-    username = message.from.username
-    chat_id = message.chat.id.to_s
+  # Parses message and returns a method name
+  #
+  # @param message [Telegram::Bot::Types::Message] the incoming message
+  # @return [String] the method name to call in the CommandHandler
+  def parse_command(message)
+    return unless command?(message)
 
-    if user_in_chat?(username, chat_id)
-      remove_user_from_chat(username, chat_id)
-      send_message(chat_id, "Записал @#{username} в натуралы!")
-    else
-      send_message(chat_id, "@#{username}, ты грязный и скучный натурал!")
-    end
+    raw_command = message.text[1..]
+    method = "handle_#{raw_command}"
+
+    method if CommandHandler::COMMANDS.include?(raw_command)
   end
 
-  def handle_go(message)
-    chat_id = message.chat.id.to_s
-    current_chat_users = users_in_chat(chat_id)
-
-    if current_chat_users.empty?
-      send_message(chat_id, 'Никто не готов шерудить очком((((')
-    else
-      users_list = current_chat_users.map { |username| "@#{username}" }.join(', ')
-      send_message(chat_id, "Погнали шерудить очком #{users_list}!")
-    end
-  end
-
-  def user_in_chat?(username, chat_id)
-    db.lrange(username, 0, -1).include?(chat_id)
-  end
-
-  def add_user_to_chat(username, chat_id)
-    db.rpush(username, chat_id)
-    db.persist(username)
-  end
-
-  def remove_user_from_chat(username, chat_id)
-    db.lrem(username, 0, chat_id)
-  end
-
-  def users_in_chat(chat_id)
-    db.keys.select { |username| user_in_chat?(username, chat_id) }
-  end
-
-  def send_message(chat_id, text)
-    client.api.send_message(chat_id: chat_id, text: text)
+  # Checks if the message is a command
+  #
+  # @param message [Telegram::Bot::Types::Message] the incoming message
+  # @return [Boolean] true if the message is a command, false otherwise
+  def command?(message)
+    message.is_a?(Telegram::Bot::Types::Message) && message.text&.start_with?('/')
   end
 end
